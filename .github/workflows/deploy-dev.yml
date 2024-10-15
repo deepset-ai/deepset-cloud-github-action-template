@@ -26,13 +26,21 @@ jobs:
 
       - name: Check if workspace exists
         run: |
-          response=$(curl --silent --show-error --fail \
+          echo "Checking if workspace ${DEEPSET_CLOUD_WORKSPACE_NAME} exists..."
+          response=$(curl --silent --show-error \
+            --write-out "\n%{http_code}" \
             --request GET \
             --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}" \
             --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}")
           
-          if [[ $response == *"error"* ]]; then
-            echo "Workspace ${DEEPSET_CLOUD_WORKSPACE_NAME} does not exist"
+          status_code=$(echo "$response" | tail -n1)
+          response_body=$(echo "$response" | sed '$d')
+          
+          echo "Workspace check status code: $status_code"
+          echo "Workspace check response body: $response_body"
+          
+          if [[ $status_code != "200" ]]; then
+            echo "Error: Workspace ${DEEPSET_CLOUD_WORKSPACE_NAME} does not exist or cannot be accessed"
             exit 1
           fi
 
@@ -43,19 +51,28 @@ jobs:
             indexing_yaml="${pipeline_dir}indexing.yaml"
             query_yaml="${pipeline_dir}query.yaml"
             
+            echo "Processing pipeline: $pipeline_name"
+            echo "Indexing YAML: $indexing_yaml"
+            echo "Query YAML: $query_yaml"
+            
             if [[ ! -f "$indexing_yaml" || ! -f "$query_yaml" ]]; then
               echo "Error: Both indexing.yaml and query.yaml must exist in $pipeline_dir"
               exit 1
             fi
             
             # Check if pipeline exists
-            pipeline_exists=$(curl --silent --show-error --fail \
+            echo "Checking if pipeline $pipeline_name exists..."
+            pipeline_exists=$(curl --silent --show-error \
+              --write-out "%{http_code}" \
+              --output /dev/null \
               --request GET \
               --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines/${pipeline_name}" \
               --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}")
             
-            if [[ $pipeline_exists == *"error"* ]]; then
-              # Pipeline doesn't exist, create new pipeline
+            echo "Pipeline existence check status code: $pipeline_exists"
+            
+            if [[ $pipeline_exists == "404" ]]; then
+              echo "Pipeline $pipeline_name doesn't exist. Creating new pipeline..."
               indexing_content=$(yq eval -o=json "$indexing_yaml")
               query_content=$(yq eval -o=json "$query_yaml")
               
@@ -71,16 +88,30 @@ jobs:
                   "deepset_cloud_version": "v2"
                 }')
               
-              response=$(curl --silent --show-error --fail \
+              echo "Payload for pipeline creation:"
+              echo "$payload" | jq .
+              
+              response=$(curl --silent --show-error \
+                --write-out "\n%{http_code}" \
                 --request POST \
                 --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
                 --header 'Content-Type: application/json' \
                 --data "$payload")
               
-              echo "Pipeline creation response for $pipeline_name: $response"
+              status_code=$(echo "$response" | tail -n1)
+              response_body=$(echo "$response" | sed '$d')
+              
+              echo "Pipeline creation response for $pipeline_name:"
+              echo "Status code: $status_code"
+              echo "Response body: $response_body"
+              
+              if [[ $status_code != "201" ]]; then
+                echo "Pipeline creation failed for $pipeline_name"
+                exit 1
+              fi
             else
-              # Pipeline exists, update only query pipeline
+              echo "Pipeline $pipeline_name exists. Updating query pipeline..."
               query_content=$(yq eval -o=json "$query_yaml")
               
               payload=$(jq -n \
@@ -93,34 +124,49 @@ jobs:
                   "deepset_cloud_version": "v2"
                 }')
               
-              response=$(curl --silent --show-error --fail \
+              echo "Payload for pipeline update:"
+              echo "$payload" | jq .
+              
+              response=$(curl --silent --show-error \
+                --write-out "\n%{http_code}" \
                 --request PATCH \
                 --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines/${pipeline_name}" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
                 --header 'Content-Type: application/json' \
                 --data "$payload")
               
-              echo "Pipeline update response for $pipeline_name: $response"
-            fi
-            
-            if [[ $response == *"error"* ]]; then
-              echo "Pipeline operation failed for $pipeline_name"
-              exit 1
+              status_code=$(echo "$response" | tail -n1)
+              response_body=$(echo "$response" | sed '$d')
+              
+              echo "Pipeline update response for $pipeline_name:"
+              echo "Status code: $status_code"
+              echo "Response body: $response_body"
+              
+              if [[ $status_code != "200" ]]; then
+                echo "Pipeline update failed for $pipeline_name"
+                exit 1
+              fi
             fi
           done
 
       - name: Validate Pipelines
         run: |
-          validation_response=$(curl --silent --show-error --fail \
+          echo "Validating pipelines..."
+          validation_response=$(curl --silent --show-error \
+            --write-out "\n%{http_code}" \
             --request POST \
             --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipeline_validations" \
             --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
             --header 'content-type: application/json' \
             --data '{"deepset_cloud_version": "v2"}')
           
-          echo "Validation response: $validation_response"
+          status_code=$(echo "$validation_response" | tail -n1)
+          response_body=$(echo "$validation_response" | sed '$d')
           
-          if [[ $validation_response == *"error"* ]]; then
+          echo "Validation status code: $status_code"
+          echo "Validation response body: $response_body"
+          
+          if [[ $status_code != "200" ]]; then
             echo "Pipeline validation failed"
             exit 1
           fi
