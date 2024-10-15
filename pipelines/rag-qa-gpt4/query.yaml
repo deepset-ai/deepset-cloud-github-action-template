@@ -1,0 +1,132 @@
+# If you need help with the YAML format, have a look at https://docs.cloud.deepset.ai/v2.0/docs/create-a-pipeline#create-a-pipeline-using-pipeline-editor.
+# This section defines components that you want to use in your pipelines. Each component must have a name and a type. You can also set the component's parameters here.
+# The name is up to you, you can give your component a friendly name. You then use components' names when specifying the connections in the pipeline.
+# Type is the class path of the component. You can check the type on the component's documentation page.
+components:
+  bm25_retriever: # Selects the most similar documents from the document store
+    type: haystack_integrations.components.retrievers.opensearch.bm25_retriever.OpenSearchBM25Retriever
+    init_parameters:
+      document_store:
+        type: haystack_integrations.document_stores.opensearch.document_store.OpenSearchDocumentStore
+        init_parameters:
+          use_ssl: True
+          verify_certs: False
+          hosts:
+            - ${OPENSEARCH_HOST}
+          http_auth:
+            - "${OPENSEARCH_USER}"
+            - "${OPENSEARCH_PASSWORD}"
+          embedding_dim: 768
+          similarity: cosine
+      top_k: 20 # The number of results to return
+
+  query_embedder:
+    type: haystack.components.embedders.sentence_transformers_text_embedder.SentenceTransformersTextEmbedder
+    init_parameters:
+      model: "intfloat/e5-base-v2"
+
+  embedding_retriever: # Selects the most similar documents from the document store
+    type: haystack_integrations.components.retrievers.opensearch.embedding_retriever.OpenSearchEmbeddingRetriever
+    init_parameters:
+      document_store:
+        type: haystack_integrations.document_stores.opensearch.document_store.OpenSearchDocumentStore
+        init_parameters:
+          use_ssl: True
+          verify_certs: False
+          hosts:
+            - ${OPENSEARCH_HOST}
+          http_auth:
+            - "${OPENSEARCH_USER}"
+            - "${OPENSEARCH_PASSWORD}"
+          embedding_dim: 768
+          similarity: cosine
+      top_k: 20 # The number of results to return
+
+  document_joiner:
+    type: haystack.components.joiners.document_joiner.DocumentJoiner
+    init_parameters:
+      join_mode: concatenate
+
+  ranker:
+    type: haystack.components.rankers.transformers_similarity.TransformersSimilarityRanker
+    init_parameters:
+      model: "intfloat/simlm-msmarco-reranker"
+      top_k: 8
+      model_kwargs:
+        torch_dtype: "torch.float16"
+
+  prompt_builder:
+    type: haystack.components.builders.prompt_builder.PromptBuilder
+    init_parameters:
+      template: |-
+        You are a technical expert.
+        You answer questions truthfully based on provided documents.
+        If the answer exists in several documents, summarize them.
+        Ignore documents that don't contain the answer to the question.
+        Only answer based on the documents provided. Don't make things up.
+        If no information related to the question can be found in the document, say so.
+        Always use references in the form [NUMBER OF DOCUMENT] when using information from a document, e.g. [3] for Document[3].
+        Never name the documents, only enter a number in square brackets as a reference.
+        The reference must only refer to the number that comes in square brackets after the document.
+        Otherwise, do not use brackets in your answer and reference ONLY the number of the document without mentioning the word document.
+        These are the documents:
+        {% for document in documents %}
+        Document[{{ loop.index }}]:
+        {{ document.content }}
+        {% endfor %}
+
+        Question: {{ question }}
+        Answer:
+
+  llm:
+    type: haystack.components.generators.openai.OpenAIGenerator
+    init_parameters:
+      api_key: {"type": "env_var", "env_vars": ["OPENAI_API_KEY"], "strict": False}
+      model: "gpt-4-turbo"
+      generation_kwargs:
+        max_tokens: 650
+        temperature: 0.0
+        seed: 0
+
+  answer_builder:
+    type: deepset_cloud_custom_nodes.augmenters.deepset_answer_builder.DeepsetAnswerBuilder
+    init_parameters:
+      reference_pattern: acm
+
+connections:  # Defines how the components are connected
+- sender: bm25_retriever.documents
+  receiver: document_joiner.documents
+- sender: query_embedder.embedding
+  receiver: embedding_retriever.query_embedding
+- sender: embedding_retriever.documents
+  receiver: document_joiner.documents
+- sender: document_joiner.documents
+  receiver: ranker.documents
+- sender: ranker.documents
+  receiver: prompt_builder.documents
+- sender: ranker.documents
+  receiver: answer_builder.documents
+- sender: prompt_builder.prompt
+  receiver: llm.prompt
+- sender: prompt_builder.prompt
+  receiver: answer_builder.prompt
+- sender: llm.replies
+  receiver: answer_builder.replies
+
+max_loops_allowed: 100
+
+inputs:  # Define the inputs for your pipeline
+  query:  # These components will receive the query as input
+  - "bm25_retriever.query"
+  - "query_embedder.text"
+  - "ranker.query"
+  - "prompt_builder.question"
+  - "answer_builder.query"
+
+  filters:  # These components will receive a potential query filter as input
+  - "bm25_retriever.filters"
+  - "embedding_retriever.filters"
+
+outputs:  # Defines the output of your pipeline
+  documents: "ranker.documents"  # The output of the pipeline is the retrieved documents
+  answers: "answer_builder.answers"  # The output of the pipeline is the generated answers

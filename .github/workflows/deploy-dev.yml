@@ -1,0 +1,85 @@
+name: Deploy to Dev Workspace
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install jq and yq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Create or Update Pipelines
+        env:
+          DEEPSET_CLOUD_API_KEY: ${{ secrets.DEEPSET_CLOUD_API_KEY }}
+          DEEPSET_CLOUD_WORKSPACE_NAME: "your-dev-workspace-name"
+        run: |
+          for pipeline_dir in pipelines/*/; do
+            pipeline_name=$(basename "$pipeline_dir")
+            indexing_yaml="${pipeline_dir}indexing.yaml"
+            query_yaml="${pipeline_dir}query.yaml"
+            
+            if [[ ! -f "$indexing_yaml" || ! -f "$query_yaml" ]]; then
+              echo "Error: Both indexing.yaml and query.yaml must exist in $pipeline_dir"
+              exit 1
+            fi
+            
+            indexing_content=$(yq eval -o=json "$indexing_yaml")
+            query_content=$(yq eval -o=json "$query_yaml")
+            
+            payload=$(jq -n \
+              --arg name "$pipeline_name" \
+              --arg indexing "$indexing_content" \
+              --arg query "$query_content" \
+              '{
+                "name": $name,
+                "yaml": null,
+                "indexing_yaml": $indexing,
+                "query_yaml": $query,
+                "deepset_cloud_version": "v2"
+              }')
+            
+            response=$(curl --silent --show-error --fail \
+              --request POST \
+              --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines" \
+              --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data "$payload")
+            
+            echo "Pipeline creation/update response for $pipeline_name: $response"
+            
+            if [[ $response == *"error"* ]]; then
+              echo "Pipeline creation/update failed for $pipeline_name"
+              exit 1
+            fi
+          done
+
+      - name: Validate Pipelines
+        env:
+          DEEPSET_CLOUD_API_KEY: ${{ secrets.DEEPSET_CLOUD_API_KEY }}
+          DEEPSET_CLOUD_WORKSPACE_NAME: "your-dev-workspace-name"
+        run: |
+          validation_response=$(curl --silent --show-error --fail \
+            --request POST \
+            --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipeline_validations" \
+            --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
+            --header 'content-type: application/json' \
+            --data '{"deepset_cloud_version": "v2"}')
+          
+          echo "Validation response: $validation_response"
+          
+          if [[ $validation_response == *"error"* ]]; then
+            echo "Pipeline validation failed"
+            exit 1
+          fi
