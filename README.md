@@ -78,8 +78,8 @@ your-repo/
 
 ### Branching Strategy
 
-- **Development Branch (`dev`)**: Used for integrating and testing new changes. Automatically deploys to the **dev** workspace upon push.
-- **Production Branch (`main`)**: Contains stable and reviewed code. Deployment to the **prod** workspace is triggered on push or manually via GitHub Actions.
+- **Development Branch (`dev`)**: Used for integrating and testing Pipeline changes. Automatically deploys to the **dev** workspace upon push.
+- **Production Branch (`main`)**: Contains stable and reviewed Pipeline YAMLs. Deployment to the **prod** workspace is triggered on push or manually via GitHub Actions.
 
 ### Adding or Updating Pipelines
 
