@@ -7,7 +7,7 @@ on:
 
 env:
   DEEPSET_CLOUD_API_KEY: ${{ secrets.DEEPSET_CLOUD_API_KEY }}
-  DEEPSET_CLOUD_WORKSPACE_NAME: "your-dev-workspace-name"
+  DEEPSET_CLOUD_WORKSPACE_NAME: "YOUR_DEV_WORKSPACE_NAME"
 
 jobs:
   deploy:
@@ -71,54 +71,48 @@ jobs:
             
             echo "Pipeline existence check status code: $pipeline_exists"
             
+            indexing_content=$(cat "$indexing_yaml")
+            query_content=$(cat "$query_yaml")
+            
             if [[ $pipeline_exists == "404" ]]; then
               echo "Pipeline $pipeline_name doesn't exist. Creating new pipeline..."
-              indexing_content=$(cat "$indexing_yaml")
-              query_content=$(cat "$query_yaml")
               
-              combined_yaml=$(cat <<EOF
-          indexing:
-          $indexing_content
-          ---
-          query:
-          $query_content
-          EOF
-          )
-              
-              echo "Combined YAML for pipeline creation:"
-              echo "$combined_yaml"
+              payload=$(jq -n \
+                --arg name "$pipeline_name" \
+                --arg indexing "$indexing_content" \
+                --arg query "$query_content" \
+                '{
+                  "name": $name,
+                  "deepset_cloud_version": "v2",
+                  "indexing_yaml": $indexing,
+                  "query_yaml": $query
+                }')
               
               response=$(curl --silent --show-error \
                 --write-out "\n%{http_code}" \
                 --request POST \
                 --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
-                --header 'Content-Type: application/x-yaml' \
-                --data-binary "$combined_yaml")
+                --header 'Content-Type: application/json' \
+                --data "$payload")
             else
               echo "Pipeline $pipeline_name exists. Updating pipeline..."
-              indexing_content=$(cat "$indexing_yaml")
-              query_content=$(cat "$query_yaml")
               
-              combined_yaml=$(cat <<EOF
-          indexing:
-          $indexing_content
-          ---
-          query:
-          $query_content
-          EOF
-          )
-              
-              echo "Combined YAML for pipeline update:"
-              echo "$combined_yaml"
+              payload=$(jq -n \
+                --arg indexing "$indexing_content" \
+                --arg query "$query_content" \
+                '{
+                  "indexing_yaml": $indexing,
+                  "query_yaml": $query
+                }')
               
               response=$(curl --silent --show-error \
                 --write-out "\n%{http_code}" \
                 --request PUT \
                 --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines/${pipeline_name}/yaml" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
-                --header 'Content-Type: application/x-yaml' \
-                --data-binary "$combined_yaml")
+                --header 'Content-Type: application/json' \
+                --data "$payload")
             fi
             
             status_code=$(echo "$response" | tail -n1)
@@ -133,7 +127,7 @@ jobs:
               exit 1
             fi
           done
-
+          
       - name: Validate Pipelines
         run: |
           echo "Validating pipelines..."
@@ -151,7 +145,7 @@ jobs:
           echo "Validation status code: $status_code"
           echo "Validation response body: $response_body"
           
-          if [[ $status_code != "200" ]]; then
+          if [[ $status_code != "204" ]]; then
             echo "Pipeline validation failed"
             exit 1
           fi

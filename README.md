@@ -1,6 +1,8 @@
 # CI/CD Template with GitHub Actions for deepset Cloud
 
-This repository serves as a template for using **GitHub Actions** as a CI/CD pipeline to manage and deploy pipelines to **deepset Cloud**. It demonstrates how to work with two separate workspaces: **dev** and **prod**.
+This repository serves as a sample template example to showcase how you can implement CI/CD with GitHub Actions by leveraging the deepset Cloud REST APIs. It demonstrates how to work with two separate workspaces: **dev** and **prod**.
+
+The purpose of this template is to illustrate best practices and provide a starting point for setting up automated pipeline management and deployment in deepset Cloud environments. While it's designed to be functional, you may need to adapt and extend it to fit your specific use case and requirements.
 
 ## Table of Contents
 
@@ -35,8 +37,12 @@ your-repo/
 │       ├── deploy-dev.yml
 │       └── deploy-prod.yml
 ├── pipelines/
-│   ├── pipeline1.yaml
-│   └── pipeline2.yaml
+│   ├── pipeline1/
+│   │   ├── indexing.yaml
+│   │   └── query.yaml
+│   └── pipeline2/
+│       ├── indexing.yaml
+│       └── query.yaml
 └── README.md
 ```
 
@@ -67,155 +73,59 @@ your-repo/
 
    - Update the workspace names in the workflow files:
 
-     - In `.github/workflows/deploy-dev.yml`, replace `"your-dev-workspace-name"` with your actual **dev** workspace name.
-     - In `.github/workflows/deploy-prod.yml`, replace `"your-prod-workspace-name"` with your actual **prod** workspace name.
-
-4. **Install Dependencies (Optional)**:
-
-   - If you plan to run the deepset Cloud CLI locally, install it with:
-
-     ```bash
-     pip install deepset-cloud
-     ```
+     - In `.github/workflows/deploy-dev.yml`, replace `"YOUR_DEV_WORKSPACE_NAME"` with your actual **dev** workspace name.
+     - In `.github/workflows/deploy-prod.yml`, replace `"YOUR_PROD_WORKSPACE_NAME"` with your actual **prod** workspace name.
 
 ## Usage
 
 ### Branching Strategy
 
-This template uses a simple branching strategy to manage deployments to different environments:
-
-- **Development Branch (`dev`)**:
-
-  - Used for integrating and testing new changes.
-  - Automatically deploys to the **dev** workspace upon push.
-
-- **Production Branch (`main`)**:
-
-  - Contains stable and reviewed code.
-  - Deployment to the **prod** workspace is triggered on push or manually via GitHub Actions.
+- **Development Branch (`dev`)**: Used for integrating and testing new changes. Automatically deploys to the **dev** workspace upon push.
+- **Production Branch (`main`)**: Contains stable and reviewed code. Deployment to the **prod** workspace is triggered on push or manually via GitHub Actions.
 
 ### Adding or Updating Pipelines
 
 1. **Add or Modify Pipeline Files**:
-
-   - Pipeline configuration files are located in the `pipelines/` directory.
-   - Create new pipeline YAML files or modify existing ones.
-
-   **Example**:
-
-   ```yaml:pipelines/pipeline1.yaml
-   version: "1.0"
-   components:
-     - name: Retriever
-       type: BM25Retriever
-       params:
-         document_store: MyDocumentStore
-
-     - name: Reader
-       type: TransformersReader
-       params:
-         model_name_or_path: deepset/roberta-base-squad2
-
-   pipelines:
-     - name: question-answering
-       nodes:
-         - name: Retriever
-           inputs: [Query]
-         - name: Reader
-           inputs: [Retriever]
-   ```
+   - Create a new directory under `pipelines/` for each pipeline.
+   - Each pipeline directory should contain two files: `indexing.yaml` and `query.yaml`.
 
 2. **Commit Changes**:
-
    ```bash
-   git add pipelines/your-pipeline.yaml
-   git commit -m "Add new pipeline"
+   git add pipelines/your-pipeline-name/
+   git commit -m "Add/Update pipeline: your-pipeline-name"
    ```
 
 3. **Push to the Appropriate Branch**:
-
-   - For development:
-
-     ```bash
-     git push origin dev
-     ```
-
-   - For production:
-
-     ```bash
-     git push origin main
-     ```
+   - For development: `git push origin dev`
+   - For production: `git push origin main`
 
 ### Triggering Deployments
 
 - **Automatic Deployment**:
-
   - **Dev Workspace**: Pushing to the `dev` branch triggers the `deploy-dev.yml` workflow.
   - **Prod Workspace**: Pushing to the `main` branch triggers the `deploy-prod.yml` workflow.
 
 - **Manual Deployment**:
-
   - For production, you can manually trigger the workflow:
-
     1. Go to the **Actions** tab in your GitHub repository.
     2. Select **"Deploy to Prod Workspace"** workflow.
     3. Click **"Run workflow"**.
 
 ### Rollback Procedures
 
-If you need to revert to a previous pipeline version:
+To revert to a previous pipeline version:
 
 1. **Revert Changes in Git**:
-
    ```bash
    git revert <commit-hash>
    git push origin dev  # or main, depending on the branch
    ```
 
-2. **Deployment**:
+2. The GitHub Actions workflow will automatically redeploy the pipelines based on the reverted code.
 
-   - The GitHub Actions workflow will redeploy the pipelines based on the reverted code.
-
-## Security Considerations
-
-- **API Keys**:
-
-  - Store sensitive information like API keys in **GitHub Secrets**.
-  - **Do not** commit sensitive data to the repository.
-
-- **Workspace Names**:
-
-  - Workspace names are specified in the workflow files. Ensure they are correct to avoid deploying to unintended workspaces.
-
-- **Secret Rotation**:
-
-  - Regularly rotate your API keys and update the GitHub Secrets accordingly.
 
 ## Extending the Template
 
-- **Add More Environments**:
+- **Add More Environments**: Copy and modify existing workflows for additional environments like staging.
+- **Notifications**: Add steps to send deployment notifications via email, Slack, etc.
 
-  - To add environments like staging, copy one of the existing workflows and modify the workspace name and trigger conditions.
-
-- **Validation and Testing**:
-
-  - Incorporate pipeline validation steps before deployment.
-
-    ```yaml
-    - name: Validate Pipelines
-      run: |
-        for pipeline in pipelines/*.yaml; do
-          deepset-cloud pipelines validate --file "$pipeline"
-        done
-    ```
-
-- **Notifications**:
-
-  - Add steps to send deployment notifications via email, Slack, etc.
-
-## Support and Contributions
-
-- **Issues**: If you encounter problems, please open an issue.
-- **Contributions**: Contributions are welcome! Feel free to fork the repository and submit a pull request.
-
----
