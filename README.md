@@ -14,9 +14,7 @@ The purpose of this template is to illustrate best practices and provide a start
   - [Adding or Updating Pipelines](#adding-or-updating-pipelines)
   - [Triggering Deployments](#triggering-deployments)
   - [Rollback Procedures](#rollback-procedures)
-- [Security Considerations](#security-considerations)
 - [Extending the Template](#extending-the-template)
-- [Support and Contributions](#support-and-contributions)
 
 ---
 
@@ -52,10 +50,10 @@ your-repo/
 
 ## Setup Instructions
 
-1. **Clone the Repository**:
+1. **Clone the Repository locally**:
 
    ```bash
-   git clone https://github.com/your-username/your-repo.git
+   git clone https://github.com/deepset-ai/deepset-cloud-github-action-template
    cd your-repo
    ```
 
