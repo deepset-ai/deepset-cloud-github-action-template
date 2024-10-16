@@ -73,79 +73,64 @@ jobs:
             
             if [[ $pipeline_exists == "404" ]]; then
               echo "Pipeline $pipeline_name doesn't exist. Creating new pipeline..."
-              indexing_content=$(yq eval -o=json "$indexing_yaml")
-              query_content=$(yq eval -o=json "$query_yaml")
+              indexing_content=$(cat "$indexing_yaml")
+              query_content=$(cat "$query_yaml")
               
-              payload=$(jq -n \
-                --arg name "$pipeline_name" \
-                --arg indexing "$indexing_content" \
-                --arg query "$query_content" \
-                '{
-                  "name": $name,
-                  "yaml": null,
-                  "indexing_yaml": $indexing,
-                  "query_yaml": $query,
-                  "deepset_cloud_version": "v2"
-                }')
+              combined_yaml=$(cat <<EOF
+          indexing:
+          $indexing_content
+          ---
+          query:
+          $query_content
+          EOF
+          )
               
-              echo "Payload for pipeline creation:"
-              echo "$payload" | jq .
+              echo "Combined YAML for pipeline creation:"
+              echo "$combined_yaml"
               
               response=$(curl --silent --show-error \
                 --write-out "\n%{http_code}" \
                 --request POST \
                 --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
-                --header 'Content-Type: application/json' \
-                --data "$payload")
-              
-              status_code=$(echo "$response" | tail -n1)
-              response_body=$(echo "$response" | sed '$d')
-              
-              echo "Pipeline creation response for $pipeline_name:"
-              echo "Status code: $status_code"
-              echo "Response body: $response_body"
-              
-              if [[ $status_code != "201" ]]; then
-                echo "Pipeline creation failed for $pipeline_name"
-                exit 1
-              fi
+                --header 'Content-Type: application/x-yaml' \
+                --data-binary "$combined_yaml")
             else
-              echo "Pipeline $pipeline_name exists. Updating query pipeline..."
-              query_content=$(yq eval -o=json "$query_yaml")
+              echo "Pipeline $pipeline_name exists. Updating pipeline..."
+              indexing_content=$(cat "$indexing_yaml")
+              query_content=$(cat "$query_yaml")
               
-              payload=$(jq -n \
-                --arg name "$pipeline_name" \
-                --arg query "$query_content" \
-                '{
-                  "name": $name,
-                  "yaml": null,
-                  "query_yaml": $query,
-                  "deepset_cloud_version": "v2"
-                }')
+              combined_yaml=$(cat <<EOF
+          indexing:
+          $indexing_content
+          ---
+          query:
+          $query_content
+          EOF
+          )
               
-              echo "Payload for pipeline update:"
-              echo "$payload" | jq .
+              echo "Combined YAML for pipeline update:"
+              echo "$combined_yaml"
               
               response=$(curl --silent --show-error \
                 --write-out "\n%{http_code}" \
-                --request PATCH \
-                --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines/${pipeline_name}" \
+                --request PUT \
+                --url "https://api.cloud.deepset.ai/api/v1/workspaces/${DEEPSET_CLOUD_WORKSPACE_NAME}/pipelines/${pipeline_name}/yaml" \
                 --header "Authorization: Bearer ${DEEPSET_CLOUD_API_KEY}" \
-                --header 'Content-Type: application/json' \
-                --data "$payload")
-              
-              status_code=$(echo "$response" | tail -n1)
-              response_body=$(echo "$response" | sed '$d')
-              
-              echo "Pipeline update response for $pipeline_name:"
-              echo "Status code: $status_code"
-              echo "Response body: $response_body"
-              
-              if [[ $status_code != "200" ]]; then
-                echo "Pipeline update failed for $pipeline_name"
-                exit 1
-              fi
+                --header 'Content-Type: application/x-yaml' \
+                --data-binary "$combined_yaml")
+            fi
+            
+            status_code=$(echo "$response" | tail -n1)
+            response_body=$(echo "$response" | sed '$d')
+            
+            echo "Pipeline operation response for $pipeline_name:"
+            echo "Status code: $status_code"
+            echo "Response body: $response_body"
+            
+            if [[ $status_code != "201" && $status_code != "200" ]]; then
+              echo "Pipeline operation failed for $pipeline_name"
+              exit 1
             fi
           done
 
