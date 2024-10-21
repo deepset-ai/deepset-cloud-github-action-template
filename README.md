@@ -59,11 +59,9 @@ your-repo/
 
 2. Set up GitHub Secrets:
 
-   a. Navigate to your GitHub repository.
-   b. Go to **Settings** > **Secrets and variables** > **Actions**.
-   c. Click **"New repository secret"** and add the following secret:
-
-     - `DEEPSET_CLOUD_API_KEY`: Your deepset Cloud API key.
+   1. Navigate to your GitHub repository.
+   2. Go to **Settings** > **Secrets and variables** > **Actions**.
+   3. Click **"New repository secret"** and add the following secret: `DEEPSET_CLOUD_API_KEY`: Your deepset Cloud API key.
 
      **Note**: The same API key is used for dev and prod environments.
 
