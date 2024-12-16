@@ -80,16 +80,17 @@ your-repo/
 ### Adding or Updating Pipelines
 
 1. Add pipeline files:
-   a. For each pipeline, create a new directory under `pipelines/`.
-   b. Each pipeline directory should contain two files: `indexing.yaml` (with the indexing pipeline) and `query.yaml` (with the query pipeline).
+  
+   1. For each pipeline, create a new directory under `pipelines/`.
+   2. Each pipeline directory should contain two files: `indexing.yaml` (with the indexing pipeline) and `query.yaml` (with the query pipeline).
 
-2. After you updated your pipeline, commit the changes:
+4. After you updated your pipeline, commit the changes:
    ```bash
    git add pipelines/your-pipeline-name/
    git commit -m "Add/Update pipeline: your-pipeline-name"
    ```
 
-3. Push your changes to the appropriate branch:
+5. Push your changes to the appropriate branch:
    - For development: `git push origin dev`
    - For production: `git push origin main`
 
